@@ -1,0 +1,21 @@
+version: 1.0.0
+
+window:
+  size: [800, 600]
+  ratio: [4, 3]
+  fullscreen: false
+
+audio:
+  master_volume: 1.0
+  bgm_volume: 1.0
+  se_volume: 1.0
+  bgm: true
+  se: true
+
+assets:
+  - sprite_sheets/
+  - images/
+  - objects/
+  - sounds/
+  - font/
+  - replays/
