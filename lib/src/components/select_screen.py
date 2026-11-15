@@ -59,13 +59,7 @@ class SelectScreen:
         self.keyboard_controller = KeyboardController(self.base)
 
         self.keyboard_controller.setKeyEvent(
-            "w", "up", lambda: self.pointerMove(-1)
-        )
-        self.keyboard_controller.setKeyEvent(
             "arrow_up", "up", lambda: self.pointerMove(-1)
-        )
-        self.keyboard_controller.setKeyEvent(
-            "s", "down", lambda: self.pointerMove(1)
         )
         self.keyboard_controller.setKeyEvent(
             "arrow_down", "down", lambda: self.pointerMove(1)
