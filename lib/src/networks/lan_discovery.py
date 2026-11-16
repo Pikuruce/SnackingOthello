@@ -1,5 +1,6 @@
 
 import socket
+from lib.src.networks.net_utils import setReuseAddress
 import threading
 import json
 
@@ -18,6 +19,7 @@ class LanDiscoveryHost:
         self.running = False
         self.sock = None
         self.thread = None
+        self.error: str | None = None
 
     def start(self) -> None:
         self.running = True
@@ -38,11 +40,7 @@ class LanDiscoveryHost:
             )
             self.sock = sock
 
-            sock.setsockopt(
-                socket.SOL_SOCKET,
-                socket.SO_REUSEADDR,
-                1
-            )
+            setReuseAddress(sock)
 
             sock.bind(("", self.discovery_port))
             sock.settimeout(1.0)
@@ -82,6 +80,7 @@ class LanDiscoveryHost:
 
         except OSError as e:
             if self.running:
+                self.error = str(e)
                 print(f"UDP discovery error: {e}")
 
         finally:

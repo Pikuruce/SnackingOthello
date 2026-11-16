@@ -6,9 +6,14 @@ from lib.src.components.text_input import TextInput
 from lib.src.networks.room_host import generateRoomCode
 from lib.src.networks.room_client import findLanRoom
 from lib.src.networks.protocol import encodeMessage, decodeMessage
+from lib.src.networks.net_utils import getLocalIPv4Addresses, parseIPv4
 from lib.src.components.select_screen import SelectScreen
 from direct.task import Task
+from direct.gui.OnscreenText import OnscreenText
+from panda3d.core import TextNode
 import threading, queue
+
+TCP_PORT = 50000
 
 class PlayOnline(PlayBase):
     def __init__(self, game, is_host: bool):
@@ -35,10 +40,25 @@ class PlayOnline(PlayBase):
 
         self.search_result = queue.Queue()
         self.searching = False
+        self.connecting = False
+        self.discovery_error_shown = False
 
         self.connected = False
         self.match_started = False
         self.is_my_turn = False
+
+        # 接続状況・エラーを表示する補助テキスト
+        self.status_text = OnscreenText(
+            text="",
+            parent=self.room.screen,
+            pos=(0, -0.45),
+            scale=0.05,
+            wordwrap=34,
+            fg=(1, 1, 1, 1),
+            font=self.room.game_font,
+            align=TextNode.ACenter,
+            mayChange=True,
+        )
 
         # ホスト・クライアント共通で登録
         self.base.taskMgr.add(
@@ -51,15 +71,25 @@ class PlayOnline(PlayBase):
             self.room.setExplain(
                 f"待機中・・・\nRoom Code: {self.room_code}"
             )
-            self.network = TcpHost(port=50000)
+            addresses = getLocalIPv4Addresses()
+            if addresses:
+                self.setStatus(
+                    "見つからない時は相手にIPを入力してもらう\n"
+                    + "\n".join(f"IP: {address}" for address in addresses)
+                )
+            self.network = TcpHost(port=TCP_PORT)
             self.network.start()
         else:
-            self.room.setExplain("ルームコード")
+            self.room.setExplain("ルームコード\nまたは ホストIP")
 
             self.room_input = TextInput(
                 self.base,
+                width=12,
             )
             self.room.addItem("さんか", self.joinRoom)
+
+    def setStatus(self, text: str) -> None:
+        self.status_text.setText(text)
 
     def updateNetwork(self, task: Task):
 
@@ -70,21 +100,34 @@ class PlayOnline(PlayBase):
 
             if isinstance(result, OSError):
                 print(f"Discovery error: {result}")
+                self.setStatus(f"検索に失敗しました\n{result}")
 
             elif result is None:
                 print("Room not found")
+                self.setStatus(
+                    "ルームが見つかりませんでした\n"
+                    "ホストのファイアウォール設定を確認するか\n"
+                    "ホスト画面のIPを入力してください"
+                )
 
             else:
-                self.host_data = result
-
-                self.network = TcpClient(
-                    self.host_data["host"],
-                    self.host_data["port"]
-                )
-                self.network.connect()
+                self.connectTo(result["host"], result["port"])
 
         except queue.Empty:
             pass
+
+        # ホスト側のUDP探索受付が失敗していたら知らせる（IP直接入力なら接続できる）
+        if (
+            self.discovery is not None
+            and self.discovery.error is not None
+            and not self.discovery_error_shown
+        ):
+            self.discovery_error_shown = True
+            self.setStatus(
+                "ルーム検索を受け付けられません\n"
+                f"{self.discovery.error}\n"
+                "相手にIPを直接入力してもらってください"
+            )
 
         # TCPイベント
         if self.network is not None:
@@ -120,6 +163,12 @@ class PlayOnline(PlayBase):
 
                 elif event == "error":
                     print(f"Network error: {data}")
+                    if not self.match_started:
+                        self.connecting = False
+                        if self.is_host:
+                            self.setStatus(f"待ち受けを開始できませんでした\n{data}")
+                        else:
+                            self.setStatus(f"接続できませんでした\n{data}")
 
         if self.connected:
             self.updateTurnPermission()
@@ -139,15 +188,36 @@ class PlayOnline(PlayBase):
         if self.network is not None:
             self.network.close()
 
+    def connectTo(self, host: str, port: int) -> None:
+        if self.network is not None:
+            self.network.close()
+
+        self.connecting = True
+        self.host_data = {"host": host, "port": port}
+        self.setStatus(f"{host} に接続中・・・")
+
+        self.network = TcpClient(host, port)
+        self.network.connect()
+
     def joinRoom(self):
-        if self.searching:
+        if self.searching or self.connecting:
             return
 
-        room_code = self.room_input.getText().strip().upper()
+        text = self.room_input.getText().strip()
+
+        # IPアドレスが入力されたら検索せず直接接続
+        ip = parseIPv4(text)
+        if ip is not None:
+            self.connectTo(ip, TCP_PORT)
+            return
+
+        room_code = text.upper()
 
         if len(room_code) != 6:
+            self.setStatus("6文字のルームコードか\nIPアドレスを入力してください")
             return
 
+        self.setStatus("ルームを探しています・・・")
         self.searching = True
 
         threading.Thread(
