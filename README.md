@@ -76,10 +76,16 @@ Pythonと必要なライブラリがそろっていれば、`main.py` を実行�
 ### ビルド
 
 ```bash
-make build
+make build-windows
 ```
 
-Windows用の単一の`.exe`ファイルを生成します。
+Windows用の`.exe`ファイルを生成します。
+
+```bash
+make build-macos
+```
+
+mac用の`.app`ファイルを生成します。
 
 ## オンライン対戦
 
