@@ -1,5 +1,6 @@
 
 import socket
+from lib.src.networks.net_utils import setReuseAddress
 import threading
 import queue
 
@@ -27,11 +28,7 @@ class TcpHost:
                 socket.AF_INET,
                 socket.SOCK_STREAM
             )
-            self.server.setsockopt(
-                socket.SOL_SOCKET,
-                socket.SO_REUSEADDR,
-                1
-            )
+            setReuseAddress(self.server)
 
             self.server.bind(("0.0.0.0", self.port))
             self.server.listen(1)
